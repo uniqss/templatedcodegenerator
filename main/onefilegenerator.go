@@ -51,6 +51,8 @@ func GenerateOneFile(templatePath, templateFileName, outputFilePath, templateSuf
 
 		for k, v := range words {
 			line = strings.ReplaceAll(line, "<%=" + k + "%>", v)
+			line = strings.ReplaceAll(line, "<%=" + k + ".tolower" + "%>", strings.ToLower(v))
+			line = strings.ReplaceAll(line, "<%=" + k + ".toupper" + "%>", strings.ToUpper(v))
 		}
 		writer.WriteString(line)
 	}

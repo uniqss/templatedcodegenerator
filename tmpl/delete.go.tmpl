@@ -14,7 +14,7 @@ import (
 func MsgProc<%=ModelName%>Delete(srcAddr string, msgId uint16, userId string, message proto.Message) bool {
 	zLog := common.ZLog
 	msg := message.(*protocol.ModelDeleteDB)
-	collection := db_wrapper.MongoClient.Database(DBName).Collection("<%=ModelName%>")
+	collection := db_wrapper.MongoClient.Database(DBName).Collection("<%=ModelName.tolower%>")
 
 	ctx := context.Background()
 

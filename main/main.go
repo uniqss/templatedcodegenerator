@@ -23,8 +23,8 @@ func usage(executableName string) {
 	log.Error("    template file format:")
 	log.Error("        ...username:=<%=name%>")
 	log.Error("        Age=<%=age%>")
-	log.Error("        nameLowerCase=<%=name.lower%>")
-	log.Error("        nameUpperCase=<%=name.upper%>")
+	log.Error("        nameLowerCase=<%=name.tolower%>")
+	log.Error("        nameUpperCase=<%=name.toupper%>")
 }
 
 func TrimFilePath(filePath string) string {
