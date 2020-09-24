@@ -19,6 +19,17 @@ func WriteLine(file *os.File, str string) {
 	file.WriteString(str + "\n")
 }
 
+func ReplaceKeyValue(line string, key string, value string) string {
+	line = strings.ReplaceAll(line, "@#%=" + key + "%#@", value)
+	line = strings.ReplaceAll(line, "@#%=" + key + ".TOLOWER" + "%#@", strings.ToLower(value))
+	line = strings.ReplaceAll(line, "@#%=" + key + ".ToLower" + "%#@", strings.ToLower(value))
+	line = strings.ReplaceAll(line, "@#%=" + key + ".toupper" + "%#@", strings.ToUpper(value))
+	line = strings.ReplaceAll(line, "@#%=" + key + ".TOUPPER" + "%#@", strings.ToUpper(value))
+	line = strings.ReplaceAll(line, "@#%=" + key + ".ToUpper" + "%#@", strings.ToUpper(value))
+	line = strings.ReplaceAll(line, "@#%=" + key + ".tolower" + "%#@", strings.ToLower(value))
+	return line
+}
+
 func GenerateOneFile(templatePath, templateFileName, outputFilePath, templateSuffix string) {
 	file, err := os.OpenFile(templatePath + templateFileName, os.O_RDONLY, os.ModePerm)
 	if err != nil {
@@ -28,6 +39,10 @@ func GenerateOneFile(templatePath, templateFileName, outputFilePath, templateSuf
 	defer file.Close()
 
 	outputFileName := outputFilePath + strings.TrimSuffix(templateFileName, templateSuffix)
+
+	for k, v := range words {
+		outputFileName = ReplaceKeyValue(outputFileName, k, v)
+	}
 	outFile, err := os.OpenFile(outputFileName, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		log.Error("os.OpenFile err:", err)
@@ -50,9 +65,7 @@ func GenerateOneFile(templatePath, templateFileName, outputFilePath, templateSuf
 		}
 
 		for k, v := range words {
-			line = strings.ReplaceAll(line, "<%=" + k + "%>", v)
-			line = strings.ReplaceAll(line, "<%=" + k + ".tolower" + "%>", strings.ToLower(v))
-			line = strings.ReplaceAll(line, "<%=" + k + ".toupper" + "%>", strings.ToUpper(v))
+			line = ReplaceKeyValue(line, k, v)
 		}
 		writer.WriteString(line)
 	}
