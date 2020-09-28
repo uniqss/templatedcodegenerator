@@ -257,7 +257,7 @@ func MsgProcUpdate{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, 
 	for {
 		if DBOperationCacheStatus == DBOperationCacheStatus_UseCacheOnly {
 			if cache != nil {
-				ModelUpdatePartial{{%=ModelName%}}(cache, msg.Info)
+				protocol.ModelUpdatePartial{{%=ModelName%}}(cache, msg.Info)
 				dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
 				msg.SucceededCount = 1
 			} else {
@@ -268,7 +268,7 @@ func MsgProcUpdate{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, 
 		}
 
 		if cache != nil {
-			ModelUpdatePartial{{%=ModelName%}}(cache, msg.Info)
+			protocol.ModelUpdatePartial{{%=ModelName%}}(cache, msg.Info)
 			dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
 			msg.SucceededCount = 1
 		} else {
@@ -279,7 +279,7 @@ func MsgProcUpdate{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, 
 				zLog.Error("update no cache, no db", zap.String("id", id))
 				break
 			}
-			ModelUpdatePartial{{%=ModelName%}}(tmpInfo, msg.Info)
+			protocol.ModelUpdatePartial{{%=ModelName%}}(tmpInfo, msg.Info)
 			CacheUpdateForceModified{{%=ModelName%}}(dbUser, id, tmpInfo)
 			msg.SucceededCount = selectCount
 		}
@@ -305,7 +305,7 @@ func MsgProcUpdateMany{{%=ModelName%}}(srcAddr string, msgId uint16, userId stri
 		cache := dbUser.model{{%=ModelName%}}s[id]
 		if DBOperationCacheStatus == DBOperationCacheStatus_UseCacheOnly {
 			if cache != nil {
-				ModelUpdatePartial{{%=ModelName%}}(cache, info)
+				protocol.ModelUpdatePartial{{%=ModelName%}}(cache, info)
 				dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
 				msg.SucceededCount++
 			} else {
@@ -314,7 +314,7 @@ func MsgProcUpdateMany{{%=ModelName%}}(srcAddr string, msgId uint16, userId stri
 			continue
 		}
 		if cache != nil {
-			ModelUpdatePartial{{%=ModelName%}}(cache, info)
+			protocol.ModelUpdatePartial{{%=ModelName%}}(cache, info)
 			dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
 			msg.SucceededCount++
 		} else {
@@ -324,7 +324,7 @@ func MsgProcUpdateMany{{%=ModelName%}}(srcAddr string, msgId uint16, userId stri
 				zLog.Error("update no cache, no db", zap.String("id", id))
 				continue
 			}
-			ModelUpdatePartial{{%=ModelName%}}(tmpInfo, tmpInfo)
+			protocol.ModelUpdatePartial{{%=ModelName%}}(tmpInfo, tmpInfo)
 			CacheUpdateForceModified{{%=ModelName%}}(dbUser, id, tmpInfo)
 			msg.SucceededCount += selectCount
 		}
