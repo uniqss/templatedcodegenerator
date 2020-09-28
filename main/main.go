@@ -8,18 +8,19 @@ import (
 )
 
 var (
-	words = make(map[string]string)
+	loopData *CSVData = nil
 )
 
 func usage(executableName string) {
-	log.Error("usage:", executableName, " templatePath outputFilePath word.txt templateSuffix")
-	log.Error("    example:", executableName, " ./tmpl ./output words_sample.txt .tmpl")
+	log.Error("usage:", executableName, " templatePath outputFilePath loop.csv templateSuffix")
+	log.Error("    example:", executableName, " ./tmpl ./output loop.csv .tmpl")
 	log.Error("    templatePath is the place to put your template files")
 	log.Error("    outputFilePath is the output path of your generated code")
 	log.Error("    postfix is the template file's postfix")
-	log.Error("    word.txt is the words to replace. format:")
-	log.Error("        name=Player")
-	log.Error("        age=age")
+	log.Error("    loop.csv is the loops to work. format:")
+	log.Error("        name")
+	log.Error("        Player")
+	log.Error("        Item")
 	log.Error("    template file format:")
 	log.Error("        ...username:=<%=name%>")
 	log.Error("        Age=<%=age%>")
@@ -42,7 +43,7 @@ func main() {
 	}
 	templatePath := args[1]
 	outputFilePath := args[2]
-	wordsFullPath := args[3]
+	loopFullPath := args[3]
 	templateSuffix := args[4]
 
 	templatePath = TrimFilePath(templatePath)
@@ -58,12 +59,21 @@ func main() {
 		log.Fatal("ioutil.ReadDir failed", err)
 	}
 
-	ok := ReadWords(wordsFullPath)
+	ok := false
+	//ok = ReadWords(wordsFullPath)
+	//if !ok {
+	//	log.Error("ReadWords failed")
+	//	return
+	//}
+
+	ok = ReadLoop(loopFullPath)
 	if !ok {
-		log.Error("ReadWords failed")
+		log.Error("ReadLoop failed")
 		return
 	}
 
+	// 如果文件名里面有关键字，一定会生成多个文件，循环loop中的每个关键字，挨个生成
+	// 如果文件名里面没有关键字，则为唯一文件，只生成一个文件，要对loop中的关键字进行循环
 	for _, f := range files {
 		fName := f.Name()
 		log.Debug(fName)
@@ -76,6 +86,13 @@ func main() {
 		if !strings.HasSuffix(fName, templateSuffix) {
 			continue
 		}
-		GenerateOneFile(templatePath, fName, outputFilePath, templateSuffix)
+
+		if strings.Contains(fName, UniqsTemplatePrefix) && strings.Contains(fName, UniqsTemplateSuffix) {
+			// 如果文件名里面有关键字，一定会生成多个文件，循环loop中的每个关键字，挨个生成
+			GenerateOneTypeMultiFile(templatePath, fName, outputFilePath, templateSuffix)
+		} else {
+			// 如果文件名里面没有关键字，则为唯一文件，只生成一个文件，要对loop中的关键字进行循环
+			GenerateLoopUniqueFile(templatePath, fName, outputFilePath, templateSuffix)
+		}
 	}
 }

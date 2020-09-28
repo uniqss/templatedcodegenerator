@@ -1,0 +1,15 @@
+package protocol
+
+const DBMsgIdStart uint16 = 20000
+
+{{%loop.begin%}}
+const DBMsgId_{{%=ModelName%}}Create = DBMsgIdStart + {{%loop.lineIdx%}}
+const DBMsgId_{{%=ModelName%}}CreateMany = DBMsgIdStart + {{%loop.lineIdx%}}
+const DBMsgId_{{%=ModelName%}}Delete = DBMsgIdStart + {{%loop.lineIdx%}}
+const DBMsgId_{{%=ModelName%}}DeleteMany = DBMsgIdStart + {{%loop.lineIdx%}}
+const DBMsgId_{{%=ModelName%}}Update = DBMsgIdStart + {{%loop.lineIdx%}}
+const DBMsgId_{{%=ModelName%}}UpdateMany = DBMsgIdStart + {{%loop.lineIdx%}}
+const DBMsgId_{{%=ModelName%}}Select = DBMsgIdStart + {{%loop.lineIdx%}}
+const DBMsgId_{{%=ModelName%}}SelectMany = DBMsgIdStart + {{%loop.lineIdx%}}
+
+{{%loop.end%}}

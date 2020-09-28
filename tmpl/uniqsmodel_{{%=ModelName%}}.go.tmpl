@@ -1,0 +1,539 @@
+package {{%=PackageName%}}
+
+import (
+	"context"
+	"github.com/golang/protobuf/proto"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.uber.org/zap"
+	"servers/protocol"
+	"wrappers/common"
+	"wrappers/db_wrapper"
+)
+
+func init() {
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Create] = MsgProcCreate{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}CreateMany] = MsgProcCreateMany{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Delete] = MsgProcDelete{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}DeleteMany] = MsgProcDeleteMany{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Update] = MsgProcUpdate{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}UpdateMany] = MsgProcUpdateMany{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Select] = MsgProcSelect{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}SelectMany] = MsgProcSelectMany{{%=ModelName%}}
+}
+
+func CacheUpdate{{%=ModelName%}}(dbUser *DBUser, id string, info *protocol.{{%=ModelName%}}) {
+	cache := dbUser.model{{%=ModelName%}}s[id]
+	if cache != nil {
+		*dbUser.model{{%=ModelName%}}s[id] = *info
+		dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
+	} else {
+		dbUser.model{{%=ModelName%}}s[id] = &protocol.{{%=ModelName%}}{}
+		*dbUser.model{{%=ModelName%}}s[id] = *info
+	}
+}
+
+// force modified even no cache exists.
+func CacheUpdateForceModified{{%=ModelName%}}(dbUser *DBUser, id string, info *protocol.{{%=ModelName%}}) {
+	cache := dbUser.model{{%=ModelName%}}s[id]
+	if cache != nil {
+		*dbUser.model{{%=ModelName%}}s[id] = *info
+		dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
+	} else {
+		dbUser.model{{%=ModelName%}}s[id] = &protocol.{{%=ModelName%}}{}
+		*dbUser.model{{%=ModelName%}}s[id] = *info
+		dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
+	}
+}
+
+func CacheDelete{{%=ModelName%}}(user *DBUser, id string) {
+	delete(user.model{{%=ModelName%}}s, id)
+	delete(user.modified{{%=ModelName%}}s, id)
+}
+
+func MsgProcCreate{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, message proto.Message, dbUser *DBUser) bool {
+	zLog := common.ZLog
+	msg := message.(*protocol.{{%=ModelName%}}DB)
+	collection := db_wrapper.MongoClient.Database(DBName).Collection("{{%=ModelName%}}")
+
+	ctx := context.Background()
+
+	for {
+		bytes, err := proto.Marshal(msg.Info)
+		if err != nil {
+			zLog.Error("proto.Marshal error", zap.Error(err))
+			break
+		}
+
+		infoBsonObject := bson.M{"Data": bytes}
+		result, err := collection.InsertOne(ctx, infoBsonObject)
+		if err != nil {
+			zLog.Error("MsgProcCreate{{%=ModelName%}} collection.InsertOne error", zap.Error(err))
+			break
+		} else {
+			if msg.Info.Id == "" {
+				msg.Info.Id = result.InsertedID.(primitive.ObjectID).Hex()
+				zLog.Debug("MsgProcCreate{{%=ModelName%}}", zap.String("InsertedID", msg.Info.Id))
+			}
+		}
+
+		msg.SucceededCount = 1
+
+		CacheUpdate{{%=ModelName%}}(dbUser, msg.Info.Id, msg.Info)
+
+		break
+	}
+	SendMsgBack(srcAddr, msgId, userId, msg)
+
+	return true
+}
+
+func MsgProcCreateMany{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, message proto.Message, dbUser *DBUser) bool {
+	zLog := common.ZLog
+	msg := message.(*protocol.{{%=ModelName%}}ManyDB)
+	collection := db_wrapper.MongoClient.Database(DBName).Collection("{{%=ModelName%}}")
+
+	ctx := context.Background()
+
+	for {
+		inserts := bson.A{}
+
+		marshalOk := true
+		for _, info := range msg.Infos {
+			bytes, err := proto.Marshal(info)
+			if err != nil {
+				zLog.Error("MsgProcCreateMany{{%=ModelName%}} proto.Marshal error", zap.Error(err))
+				marshalOk = false
+				break
+			}
+			inserts = append(inserts, bson.M{"Data": bytes})
+		}
+		if !marshalOk {
+			break
+		}
+
+		result, err := collection.InsertMany(ctx, inserts)
+		if err != nil {
+			zLog.Error("MsgProcCreateMany{{%=ModelName%}} collection.InsertMany error", zap.Error(err))
+			break
+		}
+
+		for _, objId := range result.InsertedIDs {
+			id := objId.(primitive.ObjectID).Hex()
+			for _, info := range msg.Infos {
+				if id == info.Id {
+					CacheUpdate{{%=ModelName%}}(dbUser, id, info)
+					break
+				}
+			}
+		}
+
+		msg.SucceededCount = int32(len(result.InsertedIDs))
+
+		break
+	}
+
+	SendMsgBack(srcAddr, msgId, userId, msg)
+
+	return true
+}
+
+func MsgProcDelete{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, message proto.Message, dbUser *DBUser) bool {
+	zLog := common.ZLog
+	msg := message.(*protocol.ModelDeleteDB)
+	DBOperationCacheStatus := msg.DBOperationCacheStatus
+
+	for {
+		id := msg.Id
+		if DBOperationCacheStatus == DBOperationCacheStatus_UseCacheOnly && dbUser.model{{%=ModelName%}}s[id] == nil {
+			msg.DeletedCount = 0
+			break
+		}
+
+		if dbUser.model{{%=ModelName%}}s[msg.Id] != nil {
+			CacheDelete{{%=ModelName%}}(dbUser, msg.Id)
+			msg.DeletedCount = 1
+		}
+
+		go func() {
+			collection := db_wrapper.MongoClient.Database(DBName).Collection("{{%=ModelName%}}")
+			Id, err := primitive.ObjectIDFromHex(msg.Id)
+			if err != nil {
+				zLog.Error("MsgProcDelete{{%=ModelName%}} primitive.ObjectIDFromHex error", zap.String("msg.Id", msg.Id), zap.Error(err))
+			}
+			filter := bson.M{"_id": Id}
+			_, err = collection.DeleteOne(context.Background(), filter)
+			if err != nil {
+				zLog.Error("MsgProcDelete{{%=ModelName%}} collection.DeleteOne error", zap.Error(err))
+			}
+		}()
+
+		break
+	}
+
+	SendMsgBack(srcAddr, msgId, userId, msg)
+
+	return true
+}
+
+func DBDeleteMany{{%=ModelName%}}(Ids []string) {
+	zLog := common.ZLog
+	go func() {
+		collection := db_wrapper.MongoClient.Database(DBName).Collection("{{%=ModelName%}}")
+		ids := bson.A{}
+
+		for _, id := range Ids {
+			objId, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				zLog.Error("primitive.ObjectIDFromHex error", zap.String("id", id), zap.Error(err))
+				break
+			}
+			ids = append(ids, objId)
+		}
+
+		filter := bson.M{"_id": bson.D{{"$in", ids}}}
+
+		_, err := collection.DeleteMany(context.Background(), filter)
+		if err != nil {
+			zLog.Error("collection.DeleteMany error", zap.Error(err))
+		}
+	}()
+}
+
+func MsgProcDeleteMany{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, message proto.Message, dbUser *DBUser) bool {
+	zLog := common.ZLog
+	msg := message.(*protocol.ModelDeleteManyDB)
+	DBOperationCacheStatus := msg.DBOperationCacheStatus
+
+	for {
+		msg.DeletedCount = 0
+
+		if DBOperationCacheStatus == DBOperationCacheStatus_UseCacheOnly {
+			var Ids []string
+			for _, id := range msg.Ids {
+				if dbUser.model{{%=ModelName%}}s[id] != nil {
+					CacheDelete{{%=ModelName%}}(dbUser, id)
+					msg.DeletedCount++
+					Ids = append(Ids, id)
+				} else {
+					zLog.Error("MsgProcDeleteMany{{%=ModelName%}} id not exist.", zap.String("id", id))
+				}
+			}
+
+			DBDeleteMany{{%=ModelName%}}(Ids)
+			break
+		}
+
+		// else delete cache first, then delete db
+		var Ids []string
+		for _, id := range msg.Ids {
+			Ids = append(Ids, id)
+			if dbUser.model{{%=ModelName%}}s[id] != nil {
+				CacheDelete{{%=ModelName%}}(dbUser, id)
+				msg.DeletedCount++
+			} else {
+				zLog.Warn("MsgProcDeleteMany{{%=ModelName%}} id not exist.", zap.String("id", id))
+			}
+		}
+
+		DBDeleteMany{{%=ModelName%}}(Ids)
+
+		break
+	}
+
+	SendMsgBack(srcAddr, msgId, userId, msg)
+
+	return true
+}
+
+func MsgProcUpdate{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, message proto.Message, dbUser *DBUser) bool {
+	zLog := common.ZLog
+	msg := message.(*protocol.{{%=ModelName%}}DB)
+	DBOperationCacheStatus := msg.DBOperationCacheStatus
+
+	id := msg.Info.Id
+	cache := dbUser.model{{%=ModelName%}}s[id]
+	for {
+		if DBOperationCacheStatus == DBOperationCacheStatus_UseCacheOnly {
+			if cache != nil {
+				ModelUpdatePartial{{%=ModelName%}}(cache, msg.Info)
+				dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
+				msg.SucceededCount = 1
+			} else {
+				zLog.Error("MsgProcUpdate{{%=ModelName%}} no cache found.", zap.String("id", id))
+				msg.SucceededCount = 0
+			}
+			break
+		}
+
+		if cache != nil {
+			ModelUpdatePartial{{%=ModelName%}}(cache, msg.Info)
+			dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
+			msg.SucceededCount = 1
+		} else {
+			// not use cache only, and no cache. 1.select from db 2.update result 3.update cache and set modified
+			tmpInfo := &protocol.{{%=ModelName%}}{}
+			selectCount := DBSelect{{%=ModelName%}}(id, tmpInfo)
+			if selectCount <= 0 {
+				zLog.Error("update no cache, no db", zap.String("id", id))
+				break
+			}
+			ModelUpdatePartial{{%=ModelName%}}(tmpInfo, msg.Info)
+			CacheUpdateForceModified{{%=ModelName%}}(dbUser, id, tmpInfo)
+			msg.SucceededCount = selectCount
+		}
+
+		break
+	}
+
+	SendMsgBack(srcAddr, msgId, userId, msg)
+
+	return true
+}
+
+func MsgProcUpdateMany{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, message proto.Message, dbUser *DBUser) bool {
+	zLog := common.ZLog
+	msg := message.(*protocol.{{%=ModelName%}}ManyDB)
+	DBOperationCacheStatus := msg.DBOperationCacheStatus
+
+	tmpInfo := &protocol.{{%=ModelName%}}{}
+
+	msg.SucceededCount = 0
+	for _, info := range msg.Infos {
+		id := info.Id
+		cache := dbUser.model{{%=ModelName%}}s[id]
+		if DBOperationCacheStatus == DBOperationCacheStatus_UseCacheOnly {
+			if cache != nil {
+				ModelUpdatePartial{{%=ModelName%}}(cache, info)
+				dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
+				msg.SucceededCount++
+			} else {
+				zLog.Error("MsgProcUpdateMany{{%=ModelName%}} no cache found.", zap.String("id", id))
+			}
+			continue
+		}
+		if cache != nil {
+			ModelUpdatePartial{{%=ModelName%}}(cache, info)
+			dbUser.modified{{%=ModelName%}}s[id] = dbUser.model{{%=ModelName%}}s[id]
+			msg.SucceededCount++
+		} else {
+			// not use cache only, and no cache. 1.select from db 2.update result 3.update cache and set modified
+			selectCount := DBSelect{{%=ModelName%}}(id, tmpInfo)
+			if selectCount <= 0 {
+				zLog.Error("update no cache, no db", zap.String("id", id))
+				continue
+			}
+			ModelUpdatePartial{{%=ModelName%}}(tmpInfo, tmpInfo)
+			CacheUpdateForceModified{{%=ModelName%}}(dbUser, id, tmpInfo)
+			msg.SucceededCount += selectCount
+		}
+	}
+
+	SendMsgBack(srcAddr, msgId, userId, msg)
+
+	return true
+}
+
+func MsgProcSelect{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, message proto.Message, dbUser *DBUser) bool {
+	msg := message.(*protocol.{{%=ModelName%}}DB)
+	DBOperationCacheStatus := msg.DBOperationCacheStatus
+
+	for {
+		id := msg.GetInfo().Id
+
+		// cache exists, use cache and return
+		cache := dbUser.model{{%=ModelName%}}s[id]
+		if DBOperationCacheStatus == DBOperationCacheStatus_UseCacheOnly {
+			if cache != nil {
+				*msg.Info = *cache
+				msg.SucceededCount = 1
+			}
+			break
+		} else {
+			if cache != nil {
+				*msg.Info = *cache
+				msg.SucceededCount = 1
+				break
+			}
+
+			// cache not exists, select from db
+			msg.SucceededCount = DBSelect{{%=ModelName%}}(id, msg.Info)
+
+			if msg.SucceededCount > 0 {
+				// update cache
+				CacheUpdate{{%=ModelName%}}(dbUser, id, msg.Info)
+			}
+		}
+
+		break
+	}
+	SendMsgBack(srcAddr, msgId, userId, msg)
+
+	return true
+}
+
+func DBSelect{{%=ModelName%}}(id string, info *protocol.{{%=ModelName%}}) int32 {
+	zLog := common.ZLog
+	collection := db_wrapper.MongoClient.Database(DBName).Collection("{{%=ModelName%}}")
+	var result bson.M
+
+	var filter bson.M
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		zLog.Error("MsgProcSelect{{%=ModelName%}} primitive.ObjectIDFromHex failed", zap.String("id", id))
+		return 0
+	}
+	filter = bson.M{"_id": objId}
+
+	fOne := collection.FindOne(context.Background(), filter, &options.FindOneOptions{})
+
+	if fOne.Err() != nil {
+		zLog.Warn("MsgProcSelect{{%=ModelName%}} collection.FindOne fOne.Err()", zap.Error(fOne.Err()))
+		return 0
+	} else {
+		err := fOne.Decode(&result)
+		if err != nil {
+			zLog.Error("MsgProcSelect{{%=ModelName%}} fOne.Decode error", zap.Error(err))
+			return 0
+		}
+
+		bytes := result["Data"].(primitive.Binary).Data
+		o := protocol.{{%=ModelName%}}{}
+		err = proto.Unmarshal(bytes, &o)
+		if err != nil {
+			zLog.Error("proto.Unmarshal failed.", zap.Error(err))
+			return 0
+		}
+		zLog.Debug("select", zap.String("info", o.String()))
+		o.Id = id
+		*info = o
+		//info.Id = id
+	}
+	return 1
+}
+
+func MsgProcSelectMany{{%=ModelName%}}(srcAddr string, msgId uint16, userId string, message proto.Message, dbUser *DBUser) bool {
+	zLog := common.ZLog
+	msg := message.(*protocol.{{%=ModelName%}}ManyDB)
+	DBOperationCacheStatus := msg.DBOperationCacheStatus
+
+	for {
+		ids := bson.A{}
+
+		for _, info := range msg.Infos {
+			id := info.Id
+			cache := dbUser.model{{%=ModelName%}}s[id]
+			if cache != nil {
+				*info = *cache
+				msg.SucceededCount++
+				continue
+			}
+
+			objId, err := primitive.ObjectIDFromHex(info.Id)
+			if err != nil {
+				zLog.Error("MsgProcSelectMany{{%=ModelName%}} primitive.ObjectIDFromHex error", zap.String("id", info.Id), zap.Error(err))
+				break
+			}
+			ids = append(ids, objId)
+		}
+
+		if DBOperationCacheStatus == DBOperationCacheStatus_UseCacheOnly {
+			break
+		}
+
+		if len(ids) <= 0 {
+			break
+		}
+
+		msg.SucceededCount += DBSelectMany{{%=ModelName%}}(ids, msg.Infos, dbUser)
+
+		break
+	}
+	SendMsgBack(srcAddr, msgId, userId, msg)
+
+	return true
+}
+
+func DBSelectMany{{%=ModelName%}}(ids bson.A, infos []*protocol.{{%=ModelName%}}, dbUser *DBUser) int32 {
+	zLog := common.ZLog
+	var SucceededCount int32 = 0
+	collection := db_wrapper.MongoClient.Database(DBName).Collection("{{%=ModelName%}}")
+	ctx := context.Background()
+
+	filter := bson.M{"_id": bson.D{{"$in", ids}}}
+
+	cursor, err := collection.Find(ctx, filter, &options.FindOptions{})
+	if err != nil {
+		zLog.Error("collection.Find failed", zap.Error(err))
+		return 0
+	}
+
+	var results []bson.M
+	if err = cursor.All(ctx, &results); err != nil {
+		zLog.Error("cursor.All", zap.Error(err))
+		return 0
+	}
+	for _, result := range results {
+		bytes := result["Data"].(primitive.Binary).Data
+		o := protocol.{{%=ModelName%}}{}
+		err = proto.Unmarshal(bytes, &o)
+		if err != nil {
+			zLog.Error("proto.Unmarshal failed.", zap.Error(err))
+			break
+		}
+		zLog.Debug("selectmany", zap.String("info", o.String()))
+		for _, info := range infos {
+			id := result["_id"].(primitive.ObjectID).Hex()
+			if info.Id == id {
+				o.Id = id
+				*info = o
+
+				// set cache
+				CacheUpdate{{%=ModelName%}}(dbUser, id, info)
+				SucceededCount++
+				break
+			}
+		}
+	}
+
+	return SucceededCount
+}
+
+func DBSave{{%=ModelName%}}(modified{{%=ModelName%}} *protocol.{{%=ModelName%}}) int64 {
+	zLog := common.ZLog
+	collection := db_wrapper.MongoClient.Database(DBName).Collection("{{%=ModelName%}}")
+
+	ctx := context.Background()
+
+	var SucceededCount int64 = 0
+	info := modified{{%=ModelName%}}
+
+	for {
+		bytes, err := proto.Marshal(info)
+		if err != nil {
+			zLog.Error("DBSave{{%=ModelName%}} proto.Marshal error", zap.Error(err))
+			break
+		}
+
+		infoBsonObject := bson.M{"Data": bytes}
+
+		Id := info.Id
+		objId, err := primitive.ObjectIDFromHex(Id)
+		if err != nil {
+			zLog.Error("DBSave{{%=ModelName%}} primitive.ObjectIDFromHex failed", zap.String("Id", Id))
+			break
+		}
+		filter := bson.M{"_id": objId}
+		updateResult, err := collection.UpdateOne(ctx, filter, bson.M{"$set": infoBsonObject})
+		if err != nil {
+			zLog.Error("collection.UpdateOne err", zap.Error(err))
+			break
+		}
+
+		SucceededCount = updateResult.ModifiedCount
+		break
+	}
+
+	return SucceededCount
+}

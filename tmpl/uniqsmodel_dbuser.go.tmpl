@@ -1,0 +1,54 @@
+package main
+
+import (
+	"go.uber.org/zap"
+	"servers/protocol"
+	"wrappers/common"
+)
+
+type DBUser struct {
+    {{%loop.begin%}}
+	model{{%=ModelName%}}s    map[string]*protocol.{{%=ModelName%}}
+	modified{{%=ModelName%}}s map[string]*protocol.{{%=ModelName%}}
+
+    {{%loop.end%}}
+}
+
+func NewDBUser() *DBUser {
+	return &DBUser{
+        {{%loop.begin%}}
+		model{{%=ModelName%}}s:    make(map[string]*protocol.{{%=ModelName%}}),
+		modified{{%=ModelName%}}s: make(map[string]*protocol.{{%=ModelName%}}),
+        {{%loop.end%}}
+	}
+}
+
+{{%loop.begin%}}
+func (dbUser *DBUser) TimerSave{{%=ModelName%}}() {
+	zLog := common.ZLog
+	modified{{%=ModelName%}}s := len(dbUser.modified{{%=ModelName%}}s)
+	if modified{{%=ModelName%}}s > 0 {
+		zLog.Debug("DBUser.TimerSave{{%=ModelName%}}", zap.Int("modified{{%=ModelName%}}s", modified{{%=ModelName%}}s))
+	}
+	for modifiedUserId, modified{{%=ModelName%}} := range dbUser.modified{{%=ModelName%}}s {
+		if dbUser.model{{%=ModelName%}}s[modifiedUserId] == nil {
+			zLog.Error("DBUser.TimerSave{{%=ModelName%}} modifiedUserId not found in dbUser.model{{%=ModelName%}}s, not saving", zap.String("modified{{%=ModelName%}}", modified{{%=ModelName%}}.String()))
+			continue
+		}
+		SucceededCount := DBSave{{%=ModelName%}}(modified{{%=ModelName%}})
+		if SucceededCount <= 0 {
+			zLog.Error("DBUser.TimerSave{{%=ModelName%}} DBSave{{%=ModelName%}} failed.", zap.String("modified{{%=ModelName%}}", modified{{%=ModelName%}}.String()))
+			continue
+		}
+	}
+	dbUser.modified{{%=ModelName%}}s = make(map[string]*protocol.{{%=ModelName%}})
+}
+
+{{%loop.end%}}
+func (dbUser *DBUser) TimerSave() {
+	zLog := common.ZLog
+	zLog.Debug("DBUser.TimerSave")
+	{{%loop.begin%}}
+	dbUser.TimerSave{{%=ModelName%}}()
+	{{%loop.end%}}
+}

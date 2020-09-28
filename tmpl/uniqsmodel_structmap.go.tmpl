@@ -1,0 +1,24 @@
+package main
+
+import (
+	"github.com/golang/protobuf/proto"
+	"servers/protocol"
+)
+
+var (
+	DBMsgStructMap    = make(map[uint16]proto.Message)
+)
+
+func init() {
+    {{%loop.begin%}}
+	DBMsgStructMap[protocol.DBMsgId_{{%=ModelName%}}Create] = &protocol.{{%=ModelName%}}DB{}
+	DBMsgStructMap[protocol.DBMsgId_{{%=ModelName%}}CreateMany] = &protocol.{{%=ModelName%}}ManyDB{}
+	DBMsgStructMap[protocol.DBMsgId_{{%=ModelName%}}Delete] = &protocol.ModelDeleteDB{}
+	DBMsgStructMap[protocol.DBMsgId_{{%=ModelName%}}DeleteMany] = &protocol.ModelDeleteManyDB{}
+	DBMsgStructMap[protocol.DBMsgId_{{%=ModelName%}}Update] = &protocol.{{%=ModelName%}}DB{}
+	DBMsgStructMap[protocol.DBMsgId_{{%=ModelName%}}UpdateMany] = &protocol.{{%=ModelName%}}ManyDB{}
+	DBMsgStructMap[protocol.DBMsgId_{{%=ModelName%}}Select] = &protocol.{{%=ModelName%}}DB{}
+	DBMsgStructMap[protocol.DBMsgId_{{%=ModelName%}}SelectMany] = &protocol.{{%=ModelName%}}ManyDB{}
+
+    {{%loop.end%}}
+}

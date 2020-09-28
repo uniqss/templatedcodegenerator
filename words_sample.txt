@@ -1,2 +1,0 @@
-ModelName = Player
-PackageName=main
