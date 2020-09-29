@@ -3,15 +3,12 @@
 ##### see https://uniqss.github.io/templatedcodegenerator/ for detail.
 
 ## Functionalities:
-
-loop.csv:
-
+##### loop.csv:
+```
 ModelName, PackageName
-
 Player, main
-
 Item, main
-
+```
 ### 1.simple template replace.
 ```
 DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Create] = MsgProcCreate{{%=ModelName%}}
