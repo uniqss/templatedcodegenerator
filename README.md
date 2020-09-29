@@ -1,5 +1,6 @@
 # templatedcodegenerator
 code generator with specified templates. replace and loops.
+see https://uniqss.github.io/templatedcodegenerator/ for detail.
 
 Functionalities:
 
