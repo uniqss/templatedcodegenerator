@@ -43,16 +43,16 @@ type DBUser struct {
 ```
 will be replaced as 
 ```
-func NewDBUser() *DBUser {
+type DBUser struct {
+	modelPlayers    map[string]*protocol.Player
+	modifiedPlayers map[string]*protocol.Player
 
-	return &DBUser{
-		modelPlayers:    make(map[string]*protocol.Player),
-		modifiedPlayers: make(map[string]*protocol.Player),
+	modelItems    map[string]*protocol.Item
+	modifiedItems map[string]*protocol.Item
 
-		modelItems:    make(map[string]*protocol.Item),
-		modifiedItems: make(map[string]*protocol.Item),
+	modelEquips    map[string]*protocol.Equip
+	modifiedEquips map[string]*protocol.Equip
 
-	}
 }
 ```
 #### 3.loopIdx support.
