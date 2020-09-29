@@ -1,15 +1,14 @@
 # templatedcodegenerator
-### code generator with specified templates. replace and loops.
-##### see https://uniqss.github.io/templatedcodegenerator/ for detail.
+## code generator with specified templates. replace and loops.
 
-## Functionalities:
+### Functionalities:
 ##### loop.csv:
 ```
 ModelName, PackageName
 Player, main
 Item, main
 ```
-### 1.simple template replace.
+#### 1.simple template replace.
 ```
 DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Create] = MsgProcCreate{{%=ModelName%}}
 ```
@@ -17,7 +16,7 @@ will be replaced as
 ```
 DBMsgProcessorMap[protocol.DBMsgId_PlayerCreate] = MsgProcCreatePlayer
 ```
-### 2.loop support.
+#### 2.loop support.
 ```
 type DBUser struct {
     {{%loop.begin%}}
@@ -41,7 +40,7 @@ func NewDBUser() *DBUser {
 	}
 }
 ```
-### 3.loopIdx support.
+#### 3.loopIdx support.
 ```
 package protocol
 
