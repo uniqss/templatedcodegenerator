@@ -7,6 +7,7 @@
 ModelName, PackageName
 Player, main
 Item, main
+Equip, main
 ```
 #### 1.simple template replace.
 ```
