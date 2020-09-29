@@ -11,11 +11,25 @@ Equip, main
 ```
 #### 1.simple template replace.
 ```
-DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Create] = MsgProcCreate{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Create] = MsgProcCreate{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}CreateMany] = MsgProcCreateMany{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Delete] = MsgProcDelete{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}DeleteMany] = MsgProcDeleteMany{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Update] = MsgProcUpdate{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}UpdateMany] = MsgProcUpdateMany{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}Select] = MsgProcSelect{{%=ModelName%}}
+	DBMsgProcessorMap[protocol.DBMsgId_{{%=ModelName%}}SelectMany] = MsgProcSelectMany{{%=ModelName%}}
 ```
 will be replaced as
 ```
-DBMsgProcessorMap[protocol.DBMsgId_PlayerCreate] = MsgProcCreatePlayer
+	DBMsgProcessorMap[protocol.DBMsgId_PlayerCreate] = MsgProcCreatePlayer
+	DBMsgProcessorMap[protocol.DBMsgId_PlayerCreateMany] = MsgProcCreateManyPlayer
+	DBMsgProcessorMap[protocol.DBMsgId_PlayerDelete] = MsgProcDeletePlayer
+	DBMsgProcessorMap[protocol.DBMsgId_PlayerDeleteMany] = MsgProcDeleteManyPlayer
+	DBMsgProcessorMap[protocol.DBMsgId_PlayerUpdate] = MsgProcUpdatePlayer
+	DBMsgProcessorMap[protocol.DBMsgId_PlayerUpdateMany] = MsgProcUpdateManyPlayer
+	DBMsgProcessorMap[protocol.DBMsgId_PlayerSelect] = MsgProcSelectPlayer
+	DBMsgProcessorMap[protocol.DBMsgId_PlayerSelectMany] = MsgProcSelectManyPlayer
 ```
 #### 2.loop support.
 ```
